@@ -1,6 +1,6 @@
 #!/bin/bash
 
-VERSION=0.7.6
+VERSION=0.7.6b
 PROGNAME="$(basename "$0")"
 
 export LC_ALL=C
@@ -24,6 +24,7 @@ Usage: $PROGNAME <options>
 Options:
     -h, --help              Show this help
     --version               Print version number
+    --config                path to the config file
 
     -i <interface>          Interface to make NATed sub-network,
                             and to provide Internet to
@@ -74,6 +75,15 @@ Options:
     --tp <port>             Transparent proxy,
                             redirect non-LAN TCP and UDP(not tested) traffic to
                             port. (usually used with '--dns')
+  XRAY TPROXY options:
+    --xray                  Enable routing to xray TPROXY
+                            Xray how to:
+                            (https://xtls.github.io/en/document/level-2/iptables_gid.html)
+    --fwmark <mark>         A label that is used to separate proxied and regular traffic (defualt 0x1)
+    --routetable <id>       IPv4 route table number for the labeled traffic (default 100)
+    --routetable6 <id>      IPv6 route table number for the labeled traffic (default 106)
+    --xport <port>          Xray TPROXY port (default is 12345)
+    --xgid <giud>           Xray process guid (default is 23333). GID owner is using for exclude localhost traffic.
     
   WiFi hotspot options:
     --ap <wifi interface> <SSID>
@@ -149,7 +159,6 @@ check_empty_option(){
     fi
 }
 
-
 define_global_variables(){
     # user options
     GATEWAY4=  # IPv4 address for this host
@@ -211,7 +220,15 @@ define_global_variables(){
     USE_PSK=0
     ISOLATE_CLIENTS=0
     QR=0 # show wifi qr
-    
+
+    # Xray variables
+    FWMARK="0x1" # mark for the traffic to be accepted by the Xray dokodemo-door
+    ROUTETABLE=100 # ip route table id for ipv4
+    ROUTETABLE6=106 # ip route table id for ipv6
+    XRAYPORT=12345 # Xray tproxy port
+    GID="23333" # GID owner for exclude localhost traffic https://xtls.github.io/en/document/level-2/iptables_gid.html
+    NO6=0 # All ipv6 traffic will we routed to the tproxy if 1
+
     # script variables
     VWIFI_IFACE=  # virtual wifi interface name, if created
     VIRT_NAME= # name to use for virtual interface if --virt-name is used
@@ -231,6 +248,9 @@ define_global_variables(){
     NM_PID=
     FIREWALLD_PID=
     TMP_FIREWALLD_ZONE=
+
+    # Configuration file options
+    CONFIG_OPTS=(GATEWAY4 PREFIX6 IID6 IPV6 NO4 BANLAN DHCP_DNS DHCP_DNS6 dnsmasq_NO_DNS NO_DNSMASQ CATCH_DNS SHOW_DNS_QUERY ETC_HOSTS ADDN_HOSTS DNS_NOCACHE CONN_IFACE INTERNET_IFACE THISHOSTNAME TP_PORT DNS MAC_USE_RANDOM NEW_MACADDR DAEMONIZE SSID PASSPHRASE HIDDEN WIFI_IFACE CHANNEL HOTSPOT20 WPA_VERSION MAC_FILTER MAC_FILTER_ACCEPT IEEE80211N REQUIREHT IEEE80211AC REQUIREVHT HT_CAPAB VHT_CAPAB VHTCHANNELWIDTH VHTSEG0CHINDEX VHTSEG1CHINDEX DRIVER NO_VIRT COUNTRY FREQ_BAND NO_HAVEGED HOSTAPD_DEBUG_ARGS USE_PSK ISOLATE_CLIENTS SHARE_METHOD FWMARK ROUTETABLE ROUTETABLE6 XRAYPORT GID NO6 QR)
 }
 
 parse_user_options(){
@@ -268,6 +288,35 @@ parse_user_options(){
                 SHARE_METHOD=redsocks
                 shift
                 ;;
+            --xray)
+                shift
+                SHARE_METHOD=xray
+                ;;
+            --fwmark)
+                shift
+                FWMARK="$1"
+                shift
+                ;;
+            --routetable)
+                shift
+                ROUTETABLE="$1"
+                shift
+                ;;
+            --routetable6)
+                shift
+                ROUTETABLE6="$1"
+                shift
+                ;;
+            --xport)
+                shift
+                XRAYPORT="$1"
+                shift
+                ;;
+            --xgid)
+                shift
+                GID="$1"
+                shift
+                ;;
                 
                 
             -g)
@@ -282,6 +331,10 @@ parse_user_options(){
             --no4)
                 shift
                 NO4=1
+                ;;
+            --no6)
+                shift
+                NO6=1
                 ;;
             --p6)
                 shift
@@ -366,6 +419,7 @@ parse_user_options(){
                 PASSPHRASE="$1"
                 shift
                 ;;
+
             --qr)
                 shift
                 QR=1
@@ -507,7 +561,10 @@ parse_user_options(){
                 LIST_CLIENTS_ID="$1"
                 shift
                 ;;
-
+            --config)
+                shift
+                shift
+                ;;
             *)
                 echo  "Invalid parameter: $1" 1>&2
                 exit 1
@@ -517,7 +574,7 @@ parse_user_options(){
 }
 
 
-# seperate ip and port
+# separate ip and port
 sep_ip_port() {
     # usage: sep_ip_port <ip:port> <var for ip> <var for port>
     # input <ip:port> can be:
@@ -962,17 +1019,19 @@ CUSTOM_CHAINS_6_filter=
 CUSTOM_CHAINS_6_nat=
 iptb() 
 {
-    local FoS=$1 # 4 | 6
+    local FoS=$1 # IP family 4 or 6
     shift
-    local Vis=$1 # 'v' | 'n'
+    local Vis=$1 # Verbose output 'v' | 'n'
     shift
     local T=$1 # table
     shift
-    local ACT=$1 # action: I | A | N  .  On undo: I or A -> D , N -> F+X
+    local ACT=$1 # action: I - Insert rule | A - Add rule | N - create chain  .  On undo: I or A -> D , N -> F+X
     shift
     local CH=$1 # chain
     shift
     
+    #echo "Input: Fos =$FoS Vis =$Vis T =$T Act =$ACT CH =$CH"
+
     [[ "$IPV6" -ne 1 && "$FoS" == "6" ]] && return
     
     local CMD_HEAD=""
@@ -986,6 +1045,7 @@ iptb()
     
     local arr_name  w
     
+    #Adding custom rules 
     for arr_name in CUSTOM_CHAINS_4_filter CUSTOM_CHAINS_4_nat CUSTOM_CHAINS_6_filter CUSTOM_CHAINS_6_nat
     do
         local arr_content
@@ -1030,9 +1090,9 @@ iptb()
     
  
     
-
     FULL="$CMD_HEAD $MOUTH $NECK -${ACT} ${CH} $@ $TAIL"
-    #echo $FULL
+    #echo "CMD_HEAD = $CMD_HEAD, MOUTH =$MOUTH, NECK =$NECK, ACT =$ACT CH =$CH \$@=$@ TAIL=$TAIL"
+    #echo "FULL: $FULL"
     $FULL
     return $?
 }
@@ -1058,7 +1118,6 @@ disable_unwanted_forwarding() {
 }
 start_nat() {
     local SUBNET_NET
-    
     local iv
 
     echo
@@ -1066,6 +1125,7 @@ start_nat() {
     
     for iv in "${IP_VERs[@]}"; do
         [[ "$iv" -eq "4" && ! $NO4 -eq 0 ]] && continue
+        [[ "$iv" -eq "6" && ! $NO6 -eq 0 ]] && continue
         
         [[ "$iv" -eq "4" ]] && SUBNET_NET="$SUBNET_NET4"
         [[ "$iv" -eq "6" ]] && SUBNET_NET="$SUBNET_NET6"
@@ -1130,6 +1190,67 @@ start_ban_lan() {
         iptb "$iv" n filter N lrt${$}${SUBNET_IFACE}-BLI || die
         iptb "$iv" v filter I lrt${$}${SUBNET_IFACE}-BLI -i ${SUBNET_IFACE} ! -p "$ICMP_NAME" -j REJECT || die # ipv6 need icmp to function. TODO: maybe we can block some unneeded icmp to improve security
         iptb "$iv" n filter I INPUT -i ${SUBNET_IFACE} -j lrt${$}${SUBNET_IFACE}-BLI || die
+    done
+
+}
+
+start_xray_rules() {
+    local SUBNET_NET
+    local iv s
+    local arr_nets_to_ignore
+
+    for iv in "${IP_VERs[@]}"; do
+        [[ "$iv" -eq "4" && ! $NO4 -eq 0 ]] && continue
+
+        if [[ "$iv" -eq "4" ]]; then
+        
+            echo
+            echo "Add ipv4 routing table, rules and xray iptables statements"
+            ip -4 rule add fwmark "$FWMARK" table "$ROUTETABLE" || die "Can not add ip rule"
+            ip -4 route add local 0.0.0.0/0 dev lo table "$ROUTETABLE" || die "Can not add ip route"
+            echo "ip -4 rule del fwmark "$FWMARK" table "$ROUTETABLE"" >> $CONFDIR/undo_iprule.sh
+            echo "ip -4 route del local 0.0.0.0/0 dev lo table "$ROUTETABLE"" >> $CONFDIR/undo_iprule.sh
+
+            SUBNET_NET="$SUBNET_NET4"
+            arr_nets_to_ignore=("0.0.0.0/8" "10.0.0.0/8" "100.64.0.0/10" "127.0.0.0/8" "169.254.0.0/16" "172.16.0.0/12" "192.168.0.0/16" "224.0.0.0/4" "240.0.0.0/4" "255.255.255.255/32")
+
+        elif [[ "$iv" -eq "6" ]]; then
+
+            echo
+            echo "Add ipv6 routing table, rules and xray iptables statements"
+            ip -6 rule add fwmark "$FWMARK" table "$ROUTETABLE6" || die
+            ip -6 route add local ::/0 dev lo table "$ROUTETABLE6" || die
+            echo "ip -6 rule del fwmark "$FWMARK" table "$ROUTETABLE6"" >> $CONFDIR/undo_iprule.sh
+            echo "ip -6 route del local ::/0 dev lo table "$ROUTETABLE6"" >> $CONFDIR/undo_iprule.sh
+
+            SUBNET_NET="$SUBNET_NET6"
+            arr_nets_to_ignore=("fc00::/7" "fe80::/10" "ff00::/8" "::1" "::")
+
+        else
+            continue
+        fi
+        
+        iptb "$iv" v mangle N XRAY"$iv" || die
+        # Excuding private and multicast networks
+        iptb "$iv" v mangle A XRAY"$iv" -d "$SUBNET_NET" -j RETURN || die
+        for s in "${arr_nets_to_ignore[@]}"; do
+            iptb "$iv" n mangle A XRAY"$iv" -d "$s" -j RETURN || die
+        done
+
+        iptb "$iv" v mangle A XRAY"$iv" -p tcp -j TPROXY --on-port "$XRAYPORT" --tproxy-mark "$FWMARK"/0xffffffff || die
+        iptb "$iv" v mangle A XRAY"$iv" -p udp -j TPROXY --on-port "$XRAYPORT" --tproxy-mark "$FWMARK"/0xffffffff || die
+        iptb "$iv" v mangle A PREROUTING -j XRAY"$iv" || die
+        # Proxy 
+          
+        iptb "$iv" v mangle N XRAY"$iv"_MASK || die
+        iptb "$iv" v mangle A XRAY"$iv"_MASK -m owner --gid-owner "$GID" -j RETURN || die
+        for s in "${arr_nets_to_ignore[@]}"; do
+            iptb "$iv" n mangle A XRAY"$iv"_MASK -d "$s" -j RETURN || die
+        done
+        iptb "$iv" v mangle A XRAY"$iv"_MASK -j MARK --set-xmark "$FWMARK"/0xffffffff || die
+        iptb "$iv" v mangle A OUTPUT -p tcp -j XRAY"$iv"_MASK || die
+        iptb "$iv" v mangle A OUTPUT -p udp -j XRAY"$iv"_MASK || die
+        
     done
 
 }
@@ -1358,6 +1479,11 @@ clean_iptables() {
     [[ -f $CONFDIR/undo_iptables_2.sh ]] && bash $CONFDIR/undo_iptables_2.sh
 }
 
+clean_ip_rules() {
+    echo "$CONFDIR"
+    [[ -f $CONFDIR/undo_iprule.sh ]] &&  bash $CONFDIR/undo_iprule.sh
+}
+
 cleanup() {
     trap "" SIGINT SIGUSR1 SIGUSR2 EXIT SIGTERM
     echo
@@ -1366,8 +1492,11 @@ cleanup() {
     kill_processes
     echo "Undoing iptables changes .."
     clean_iptables > /dev/null
+    clean_ip_rules > /dev/null
+
     _cleanup 2> /dev/null
-    
+    echo "Undo ip routing rules"
+
     #pgid=$(ps opgid= $$ |awk '{print $1}' )
     #echo "Killing PGID $pgid ..."
     #kill -15 -$pgid
@@ -2139,6 +2268,54 @@ check_rfkill_unblock_wifi() {
     fi
 }
 
+
+is_config_opt() {
+    local elem opt="$1"
+    for elem in "${CONFIG_OPTS[@]}"; do
+        if [[ "$elem" == "$opt" ]]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+check_fmark_free() {
+    local ipver=$1
+    local MARK_TO_CHECK=$2
+    if ip $ipver rule | grep -q "fwmark $MARK_TO_CHECK"; then
+        return 0
+    else
+       return 1
+    fi
+}
+
+check_route_table_id_free() {
+    local ipver=$1
+    local TABLE_ID=$2
+    if ip $ipver route show table "$TABLE_ID" | grep -q "."; then
+        return 0
+    else
+        return 1      
+    fi
+}
+
+# Load options from config file
+read_config() {
+    local opt_name opt_val line
+
+    while read line; do
+        # Read switches and their values
+        opt_name="${line%%=*}"
+        opt_val="${line#*=}"
+        if is_config_opt "$opt_name" ; then
+            eval $opt_name="\$opt_val"
+        else
+            echo "WARN: Unrecognized configuration entry $opt_name" >&2
+        fi
+    done < "$LOAD_CONFIG"
+}
+
+
 #=========== Above are functions ======================
 #=========== Executing begin ==============================
 
@@ -2149,6 +2326,20 @@ check_empty_option "$@"
 define_global_variables
 
 ARGS=( "$@" )
+
+# Preprocessing for --config before option-parsing starts
+for ((i=0; i<$#; i++)); do
+    if [[ "${ARGS[i]}" = "--config" ]]; then
+        if [[ -f "${ARGS[i+1]}" ]]; then
+            LOAD_CONFIG="${ARGS[i+1]}"
+            read_config
+        else
+            echo "ERROR: No config file found at given location" >&2
+            exit 1
+        fi
+        break
+    fi
+done
 
 parse_user_options "$@"
 # TODO: detect user option conflict
@@ -2169,6 +2360,24 @@ daemonizing_check
 
 [[ -n "$NEW_MACADDR" ]] && check_if_new_mac_valid # check NEW_MACADDR. will exit if not valid
 
+if [[ "$IPV6" -eq 0 ]]; then
+    IP_VERs=("4")
+else
+    IP_VERs=("4" "6")
+fi
+
+# Check if fmark and route table number is used already
+if [[ "$SHARE_METHOD" == "xray" ]]; then
+    for iv in "${IP_VERs[@]}"; do
+        if [[ "$iv" -eq "4" ]]; then
+            if check_fmark_free -4 "$FWMARK"; then die "Couldn't set v4 fwmark. It is already in use" ; fi
+            if check_route_table_id_free -4 "$ROUTETABLE"; then die "Couldn't set v4 route table id. It is already in use"; fi
+        elif [[ "$iv" -eq "6" ]]; then
+            if check_fmark_free -6 "$FWMARK"; then die "Couldn't set v6 fwmark. It is already in use" ; fi
+            if check_route_table_id_free -6 "$ROUTETABLE6"; then die "Couldn't set v6 route table id. It is already in use"; fi
+        fi
+    done
+fi
 # checks finished
 
 ## ===== Above don't echo anything if no warning or error====================
@@ -2247,12 +2456,6 @@ echo
 iptables --version
 echo "Notice: Not showing all operations done to iptables rules"
 
-if [[ "$IPV6" -eq 0 ]]; then
-    IP_VERs=("4")
-else
-    IP_VERs=("4" "6")
-fi
-
 disable_unwanted_forwarding 
 
 
@@ -2308,6 +2511,28 @@ elif [[ "$SHARE_METHOD" == "redsocks" ]]; then
     [[ "$BANLAN" -eq 1 ]] && start_ban_lan
     
     start_redsocks
+elif [[ "$SHARE_METHOD" == "xray" ]]; then
+    echo "Share metod: XRAY"
+    [[ "$INTERNET_IFACE" && "$dnsmasq_NO_DNS" -eq 0 ]] && echo -e "\nWARN: You specified Internet interface but this host is providing local DNS. In some unexpected case (eg. mistaken configurations), queries may leak to other interfaces, which you should be aware of.\n" >&2
+    
+    start_nat
+    
+    [[ "$BANLAN" -eq 1 ]] && start_ban_lan
+    
+    echo 1 > "/proc/sys/net/ipv4/ip_forward" || die "Failed enabling system ipv4 forwarding" # TODO maybe uneeded in '--no4' mode
+    
+    if [[ $IPV6 -eq 1 ]]; then
+        echo 1 > "/proc/sys/net/ipv6/conf/all/forwarding" || die "Failed enabling system ipv6 forwarding" # TODO if '-o' used, set only 2 interfaces' bits
+    fi
+    
+    # to enable clients to establish PPTP connections we must
+    # load nf_nat_pptp module
+    modprobe nf_nat_pptp > /dev/null 2>&1 && echo "Loaded kernel module nf_nat_pptp"
+
+    #add_xray_iptables_rules and routing
+    
+    start_xray_rules
+
 fi
 
 # start dhcp + dns (optional)
