@@ -1,0 +1,14 @@
+[Unit]
+Description=LnxRouter Service
+Wants=network.target
+After=network.target xray.service
+
+[Service]
+Type=simple
+ExecStart=lnxrouter --config /etc/lnxrouter.cfg
+KillSignal=SIGTERM
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
