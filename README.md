@@ -4,7 +4,7 @@ Set Linux as router in one command. Able to provide Internet, or create WiFi hot
 
 It wraps `iptables`, `dnsmasq` etc. stuff. Use in one command, restore in one command or by `control-c` (or even by closing terminal window).
 
-[ Upsteram is lnxrouter by  🛠️](https://garywill.github.io)
+[ Upsteram is lnxrouter by Garrywill 🛠️](https://garywill.github.io)
 
 
 ## Features
@@ -65,13 +65,13 @@ Internet----(eth0/wlan0)-Linux-(virtual interface)-----VM/container
 
 ## Install
 
-1-file-script. Release on [Linux-router repo on Github](https://github.com/garywill/linux-router). Just download and run the bash script (meet the dependencies). In this case use without installation.
+1-file-script. Release on [Linux-router repo on Github](https://github.com/evgenyzh/linux-router-for-xray). Download and put script to the /usr/local/bin/. Config to the /etc/lnxrouter.cfg and service file to the /etc/systemd/system/lnxrouter.service. Then reload systemd daemons and enable service:
 
-I'm currently not packaging for any distro. If you do, open a PR and add the link (can be with a version badge) to list here
-
-| Linux distro |                                                                                                            |
-| ------------ | ---------------------------------------------------------------------------------------------------------- |
-| Any          | download [1-file-script](https://raw.githubusercontent.com/garywill/linux-router/master/lnxrouter) and run without installation |
+```bash
+systemctl daemon-reload
+systemctl enable lnxrouter
+systemctl start lnxrouter
+```
 
 ### Dependencies
 
@@ -298,7 +298,8 @@ nscd is domain name cache service, which shouldn't be accessed from in jail here
 
 <details>
 
-```Options:
+```bash
+  Options:
     -h, --help              Show this help
     --version               Print version number
     --config                path to the config file
@@ -353,7 +354,7 @@ nscd is domain name cache service, which shouldn't be accessed from in jail here
                             redirect non-LAN TCP and UDP(not tested) traffic to
                             port. (usually used with '--dns')
 
-```XRAY TPROXY options:
+  XRAY TPROXY options:
     --xray                  Enable routing to xray TPROXY
                             Xray how to: (https://xtls.github.io/en/document/level-2/iptables_gid.html)
     --fwmark <mark>         A label that is used to separate proxied and regular traffic (defualt 0x1)
@@ -427,6 +428,7 @@ Examples:
     lnxrouter --ap wlan0 MyAccessPoint -p MyPassPhrase
     lnxrouter -i eth1 --tp <transparent-proxy> --dns <dns-proxy>
 ```
+
 </details>
 
 ## What changes are done to Linux system
