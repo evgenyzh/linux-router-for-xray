@@ -4,7 +4,7 @@ Set Linux as router in one command. Able to provide Internet, or create WiFi hot
 
 It wraps `iptables`, `dnsmasq` etc. stuff. Use in one command, restore in one command or by `control-c` (or even by closing terminal window).
 
-[Linux-Router News & Developer Notes 📰](https://github.com/garywill/linux-router/issues/28) | [More tools and projects 🛠️](https://garywill.github.io) | [🍻 Buy me a coffee ❤️](https://github.com/garywill/receiving/blob/master/receiving_methods.md)
+[ Upsteram is lnxrouter by  🛠️](https://garywill.github.io)
 
 
 ## Features
@@ -297,13 +297,14 @@ nscd is domain name cache service, which shouldn't be accessed from in jail here
 ### CLI usage and other features
 
 <details>
+'''
 
-```
 Usage: lnxrouter <options>
 
 Options:
     -h, --help              Show this help
     --version               Print version number
+    --config                path to the config file
 
     -i <interface>          Interface to make NATed sub-network,
                             and to provide Internet to
@@ -354,6 +355,15 @@ Options:
     --tp <port>             Transparent proxy,
                             redirect non-LAN TCP and UDP(not tested) traffic to
                             port. (usually used with '--dns')
+  XRAY TPROXY options:
+    --xray                  Enable routing to xray TPROXY
+                            Xray how to:
+                            (https://xtls.github.io/en/document/level-2/iptables_gid.html)
+    --fwmark <mark>         A label that is used to separate proxied and regular traffic (defualt 0x1)
+    --routetable <id>       IPv4 route table number for the labeled traffic (default 100)
+    --routetable6 <id>      IPv6 route table number for the labeled traffic (default 106)
+    --xport <port>          Xray TPROXY port (default is 12345)
+    --xgid <giud>           Xray process guid (default is 23333). GID owner is using for exclude localhost traffic.
     
   WiFi hotspot options:
     --ap <wifi interface> <SSID>
@@ -419,7 +429,7 @@ Examples:
     lnxrouter -i eth1
     lnxrouter --ap wlan0 MyAccessPoint -p MyPassPhrase
     lnxrouter -i eth1 --tp <transparent-proxy> --dns <dns-proxy>
-```
+
 
 </details>
 
@@ -434,25 +444,6 @@ On exit of a linux-router instance, script **will do cleanup**, i.e. undo most c
 5. The wifi device which is used to create hotspot is `rfkill unblock`ed
 6. WiFi country code, if user assigns
 
-## Meet contributor(s) and become one of them
-
-Visit [**my homepage** 🏡](https://garywill.github.io) to see **more tools and projects** 🛠️.
-
-> [❤️ Buy me a coffee](https://github.com/garywill/receiving/blob/master/receiving_methods.md) , this project took me lots of time! ([❤️ 扫码领红包并打赏一个!](https://github.com/garywill/receiving/blob/master/receiving_methods.md))
-> 
-> 🥂 ( ^\_^) o自自o (^_^ ) 🍻
-
-🤝 Bisides, thank [create_ap](https://github.com/oblique/create_ap) by [oblique](https://github.com/oblique). This script was forked from create\_ap. Now they are quite different. (See `history` branch for how I modified create_ap). 🤝 Also thank those who contributed to that project.
-
-👨‍💻 You can be contributor, too! 
-
-- 🍃 There're some TO-DOs listed, in both [readme TODO](#todo) and [in the code file](https://github.com/garywill/linux-router/search?q=TODO&type=code)
-- 🍃 Also some [unfulfilled enhancements in the Issues](https://github.com/garywill/linux-router/issues?q=is%3Aissue+is%3Aopen+label%3Aenhancement)
-- 🙋‍♂️ Contributions are not limited to coding. There're [some posts and questions](https://github.com/garywill/linux-router/issues) that need more people to answer
-
-## TODO
-- WPA3
-- Global IPv6
 
 ## License
 
