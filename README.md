@@ -298,8 +298,6 @@ nscd is domain name cache service, which shouldn't be accessed from in jail here
 
 <details>
 ```
-Usage: lnxrouter
-
 Options:
     -h, --help              Show this help
     --version               Print version number
@@ -427,8 +425,8 @@ Examples:
     lnxrouter -i eth1
     lnxrouter --ap wlan0 MyAccessPoint -p MyPassPhrase
     lnxrouter -i eth1 --tp <transparent-proxy> --dns <dns-proxy>
-```
 
+```
 </details>
 
 ## What changes are done to Linux system
