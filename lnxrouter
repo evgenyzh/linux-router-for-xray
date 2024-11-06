@@ -1,6 +1,6 @@
 #!/bin/bash
 
-VERSION=0.7.6b
+VERSION=0.7.6
 PROGNAME="$(basename "$0")"
 
 export LC_ALL=C
@@ -9,7 +9,7 @@ SCRIPT_UMASK=0122
 umask $SCRIPT_UMASK
 
 phead() {
-    echo "linux-router $VERSION (https://github.com/garywill/linux-router)"
+    echo "linux-router $VERSION (https://github.com/evgenyzh/linux-router-for-xray.git)"
 }
 phead2() {
     echo "Released under LGPL, with no warranty. Use on your own risk."
