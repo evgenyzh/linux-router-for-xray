@@ -297,8 +297,7 @@ nscd is domain name cache service, which shouldn't be accessed from in jail here
 ### CLI usage and other features
 
 <details>
-'''
-
+```
 Usage: lnxrouter <options>
 
 Options:
