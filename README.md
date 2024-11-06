@@ -298,7 +298,7 @@ nscd is domain name cache service, which shouldn't be accessed from in jail here
 
 <details>
 ```
-Usage: lnxrouter <options>
+Usage: lnxrouter
 
 Options:
     -h, --help              Show this help
@@ -354,10 +354,9 @@ Options:
     --tp <port>             Transparent proxy,
                             redirect non-LAN TCP and UDP(not tested) traffic to
                             port. (usually used with '--dns')
-  XRAY TPROXY options:
+``` XRAY TPROXY options:
     --xray                  Enable routing to xray TPROXY
-                            Xray how to:
-                            (https://xtls.github.io/en/document/level-2/iptables_gid.html)
+                            Xray how to: (https://xtls.github.io/en/document/level-2/iptables_gid.html)
     --fwmark <mark>         A label that is used to separate proxied and regular traffic (defualt 0x1)
     --routetable <id>       IPv4 route table number for the labeled traffic (default 100)
     --routetable6 <id>      IPv6 route table number for the labeled traffic (default 106)
@@ -428,7 +427,7 @@ Examples:
     lnxrouter -i eth1
     lnxrouter --ap wlan0 MyAccessPoint -p MyPassPhrase
     lnxrouter -i eth1 --tp <transparent-proxy> --dns <dns-proxy>
-
+```
 
 </details>
 
