@@ -1244,7 +1244,11 @@ start_xray_rules() {
           
         iptb "$iv" v mangle N XRAY"$iv"_MASK || die
         iptb "$iv" v mangle A XRAY"$iv"_MASK -m owner --gid-owner "$GID" -j RETURN || die
-        for s in "${arr_nets_to_ignore[@]}"; do
+        
+        # Exclude NTP
+        iptb "$iv" v mangle A XRAY"$iv"_MASK -p udp --dport 123 -j RETURN || die
+
+	for s in "${arr_nets_to_ignore[@]}"; do
             iptb "$iv" n mangle A XRAY"$iv"_MASK -d "$s" -j RETURN || die
         done
         iptb "$iv" v mangle A XRAY"$iv"_MASK -j MARK --set-xmark "$FWMARK"/0xffffffff || die
